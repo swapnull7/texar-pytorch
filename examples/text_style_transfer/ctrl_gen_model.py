@@ -122,27 +122,27 @@ class CtrlGenModel(nn.Module):
 
         # Classification loss for the classifier
         # Get inputs in correct format, [batch_size, channels, seq_length]
-        class_inputs = self.class_embedder(ids=inputs['text_ids'][:, 1:]).permute(0, 2, 1)
+        # class_inputs = self.class_embedder(ids=inputs['text_ids'][:, 1:]).permute(0, 2, 1)
 
         class_logits, class_preds = self.classifier(
-            input=class_inputs,
+            input=self.class_embedder(ids=inputs['text_ids'][:, 1:]),
             sequence_length=f_labels - 1)
         class_logits = class_logits
         loss_d_class = sig_ce_logits_loss(class_logits, f_labels)
 
         # Get inputs in correct format, [batch_size, channels, seq_length]
-        soft_inputs = self.class_embedder(soft_ids=soft_outputs_.sample_id).permute(0, 2, 1)
+        # soft_inputs =
         soft_logits, soft_preds = self.classifier(
-            input=soft_inputs,
+            input=self.class_embedder(soft_ids=soft_outputs_.sample_id),
             sequence_length=soft_length_)
 
         soft_logits = soft_logits
         loss_g_class = sig_ce_logits_loss(soft_logits, (1 - f_labels))
 
         # Accuracy on greedy-decoded samples, for training progress monitoring
-        greedy_inputs = self.class_embedder(ids=outputs_.sample_id).permute(0, 2, 1)
+        # greedy_inputs = self.class_embedder(ids=outputs_.sample_id)
         _, gdy_preds = self.classifier(
-            input=greedy_inputs,
+            input=self.class_embedder(ids=outputs_.sample_id),
             sequence_length=length_)
         accu_g_gdy = tx.evals.accuracy(
             labels=1 - f_labels, preds=gdy_preds)

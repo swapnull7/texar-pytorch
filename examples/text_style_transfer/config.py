@@ -89,7 +89,8 @@ model = {
     'classifier': {
         'kernel_size': [3, 4, 5],
         'out_channels': 128,
-        'other_conv_kwargs': {'padding': 0},
+        'data_format': 'channels_last',
+        'other_conv_kwargs': [[{'padding': 1}, {'padding': 2}, {'padding': 2}]],
         'dropout_conv': [1],
         'dropout_rate': 0.5,
         'num_dense_layers': 0,
