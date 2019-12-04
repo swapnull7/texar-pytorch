@@ -82,6 +82,11 @@ def _main():
         hparams=config.model['opt']
     )
 
+    train_op_g_ae = tx.core.get_train_op(
+        params=model.g_vars,
+        hparams=config.model['opt']
+    )
+
     def _train_epoch(gamma_, lambda_g_, epoch, verbose=True):
         model.train()
         avg_meters_d = tx.utils.AverageRecorder(size=10)
@@ -100,8 +105,12 @@ def _main():
 
             vals_g = model(batch, gamma_, lambda_g_, mode="train", component="G")
             loss_g = vals_g['loss_g']
+            loss_g_ae = vals_g['loss_g_ae']
+            loss_g_ae.backward(retain_graph=True)
             loss_g.backward()
+            train_op_g_ae()
             train_op_g()
+
             recorder_g = {key: value.detach().cpu().data for (key, value) in vals_g.items()}
             avg_meters_g.add(recorder_g)
 
