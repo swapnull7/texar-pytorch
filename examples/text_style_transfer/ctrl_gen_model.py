@@ -95,7 +95,8 @@ class CtrlGenModel(nn.Module):
 
         # text_ids for encoder, with BOS token removed
         enc_text_ids = inputs['text_ids'][:, 1:].long()
-        enc_outputs, final_state = self.encoder(self.embedder(enc_text_ids),
+        enc_inputs = self.embedder(enc_text_ids)
+        enc_outputs, final_state = self.encoder(enc_inputs,
                                                 sequence_length=inputs['length'] - 1)
         z = final_state[:, self._hparams.dim_c:]
 
@@ -137,22 +138,22 @@ class CtrlGenModel(nn.Module):
             helper=gumbel_helper,
             initial_state=self.connector(h_))
 
-        # Get inputs in correct format, [batch_size, channels, seq_length]
-        # soft_inputs =
-        soft_logits, soft_preds = self.classifier(
-            input=self.class_embedder(soft_ids=soft_outputs_.sample_id),
-            sequence_length=soft_length_)
-
-        sig_ce_logits_loss = nn.BCEWithLogitsLoss()
-
-        loss_g_class = sig_ce_logits_loss(soft_logits, (1 - f_labels))
-
         # Greedy decoding, used in eval
         outputs_, _, length_ = self.decoder(
             memory=enc_outputs,
             memory_sequence_length=inputs['length'] - 1,
             decoding_strategy='infer_greedy', initial_state=self.connector(h_),
             embedding=self.embedder, start_tokens=start_tokens, end_token=end_token)
+
+        # Get inputs in correct format, [batch_size, channels, seq_length]
+        soft_inputs = self.class_embedder(soft_ids=soft_outputs_.sample_id)
+        soft_logits, soft_preds = self.classifier(
+            input=soft_inputs,
+            sequence_length=soft_length_)
+
+        sig_ce_logits_loss = nn.BCEWithLogitsLoss()
+
+        loss_g_class = sig_ce_logits_loss(soft_logits, (1 - f_labels))
 
         # Accuracy on greedy-decoded samples, for training progress monitoring
         # greedy_inputs = self.class_embedder(ids=outputs_.sample_id)
@@ -178,7 +179,7 @@ class CtrlGenModel(nn.Module):
             ret.update({'outputs': outputs_})
         return ret
 
-    def forward(self, inputs, gamma, lambda_g, mode, component):
+    def forward(self, inputs, gamma, lambda_g, mode, component=None):
 
         f_labels = inputs['labels'].float()
         if mode == 'train':
