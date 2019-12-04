@@ -90,20 +90,20 @@ def _main():
         step = 0
         for batch in iterator:
             step += 1
-            iterator.switch_to_dataset("train_d")
 
             vals_d = model(batch, gamma_, lambda_g_, mode="train", component="D")
-            avg_meters_d.add(vals_d)
             loss_d = vals_d['loss_d']
             loss_d.backward()
             train_op_d()
+            recorder_d = {key: value.detach().cpu().data for (key, value) in vals_d.items()}
+            avg_meters_d.add(recorder_d)
 
-            iterator.switch_to_dataset("train_g")
             vals_g = model(batch, gamma_, lambda_g_, mode="train", component="G")
-            avg_meters_g.add(vals_g)
             loss_g = vals_g['loss_g']
             loss_g.backward()
             train_op_g()
+            recorder_g = {key: value.detach().cpu().data for (key, value) in vals_g.items()}
+            avg_meters_g.add(recorder_g)
 
             if verbose and (step == 1 or step % config.display == 0):
                 print('step: {}, {}'.format(step, avg_meters_d.to_str(4)))
