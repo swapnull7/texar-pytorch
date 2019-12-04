@@ -94,7 +94,6 @@ class CtrlGenModel(nn.Module):
 
         # text_ids for encoder, with BOS token removed
         enc_text_ids = inputs['text_ids'][:, 1:].long()
-        import pdb;pdb.set_trace()
         enc_outputs, final_state = self.encoder(self.embedder(enc_text_ids),
                                                 sequence_length=inputs['length'] - 1)
         z = final_state[:, self._hparams.dim_c:]
