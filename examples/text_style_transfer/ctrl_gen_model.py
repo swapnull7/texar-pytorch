@@ -38,7 +38,7 @@ class CtrlGenModel(nn.Module):
         self.embedder = WordEmbedder(vocab_size=vocab.size,
                                      hparams=self._hparams.embedder)
 
-        self.encoder = UnidirectionalRNNEncoder[tx.core.RNNState](input_size=self.embedder.dim,
+        self.encoder = UnidirectionalRNNEncoder(input_size=self.embedder.dim,
                                                 hparams=self._hparams.encoder)
 
         # Encodes label
@@ -72,19 +72,37 @@ class CtrlGenModel(nn.Module):
         self.d_vars = collect_trainable_variables(
             [self.class_embedder, self.classifier])
 
-    def forward(self, inputs, gamma, lambda_g, mode, component):
+    def forward_D(self, inputs, f_labels, mode):
+
+        # Classification loss for the classifier
+        # Get inputs in correct format, [batch_size, channels, seq_length]
+        class_logits, class_preds = self.classifier(
+            input=self.class_embedder(ids=inputs['text_ids'][:, 1:]),
+            sequence_length=f_labels - 1)
+
+        sig_ce_logits_loss = nn.BCEWithLogitsLoss()
+
+        loss_d = sig_ce_logits_loss(class_logits, f_labels)
+        accu_d = tx.evals.accuracy(labels=f_labels,
+                                   preds=class_preds)
+        return {
+            "loss_d": loss_d,
+            "accu_d": accu_d
+        }
+
+    def forward_G(self, inputs, f_labels, gamma, lambda_g, mode):
+
         # text_ids for encoder, with BOS token removed
         enc_text_ids = inputs['text_ids'][:, 1:].long()
-
+        import pdb;pdb.set_trace()
         enc_outputs, final_state = self.encoder(self.embedder(enc_text_ids),
                                                 sequence_length=inputs['length'] - 1)
         z = final_state[:, self._hparams.dim_c:]
 
         labels = inputs['labels'].view(-1, 1).float()
-        f_labels = inputs['labels'].float()
 
         c = self.label_connector(labels)
-        c_ = self.label_connector(1-labels)
+        c_ = self.label_connector(1 - labels)
         h = torch.cat([c, z], dim=1)
         h_ = torch.cat([c_, z], dim=1)
 
@@ -97,56 +115,6 @@ class CtrlGenModel(nn.Module):
             sequence_length=inputs['length'] - 1
         )
 
-        start_tokens = torch.ones_like(f_labels) * self.vocab.bos_token_id
-        start_tokens = start_tokens.long()
-        end_token = self.vocab.eos_token_id
-
-        gumbel_helper = GumbelSoftmaxEmbeddingHelper(start_tokens=start_tokens,
-                                                     end_token=end_token,
-                                                     tau=gamma)
-
-        sig_ce_logits_loss = torch.nn.BCEWithLogitsLoss()
-
-        soft_outputs_, _, soft_length_, = self.decoder(
-            memory=enc_outputs,
-            memory_sequence_length=inputs['length'] - 1,
-            helper=gumbel_helper,
-            initial_state=self.connector(h_))
-
-        # Greedy decoding, used in eval
-        outputs_, _, length_ = self.decoder(
-            memory=enc_outputs,
-            memory_sequence_length=inputs['length'] - 1,
-            decoding_strategy='infer_greedy', initial_state=self.connector(h_),
-            embedding=self.embedder, start_tokens=start_tokens, end_token=end_token)
-
-        # Classification loss for the classifier
-        # Get inputs in correct format, [batch_size, channels, seq_length]
-        # class_inputs = self.class_embedder(ids=inputs['text_ids'][:, 1:]).permute(0, 2, 1)
-
-        class_logits, class_preds = self.classifier(
-            input=self.class_embedder(ids=inputs['text_ids'][:, 1:]),
-            sequence_length=f_labels - 1)
-        class_logits = class_logits
-        loss_d_class = sig_ce_logits_loss(class_logits, f_labels)
-
-        # Get inputs in correct format, [batch_size, channels, seq_length]
-        # soft_inputs =
-        soft_logits, soft_preds = self.classifier(
-            input=self.class_embedder(soft_ids=soft_outputs_.sample_id),
-            sequence_length=soft_length_)
-
-        soft_logits = soft_logits
-        loss_g_class = sig_ce_logits_loss(soft_logits, (1 - f_labels))
-
-        # Accuracy on greedy-decoded samples, for training progress monitoring
-        # greedy_inputs = self.class_embedder(ids=outputs_.sample_id)
-        _, gdy_preds = self.classifier(
-            input=self.class_embedder(ids=outputs_.sample_id),
-            sequence_length=length_)
-        accu_g_gdy = tx.evals.accuracy(
-            labels=1 - f_labels, preds=gdy_preds)
-
         loss_g_ae = tx.losses.sequence_sparse_softmax_cross_entropy(
             labels=inputs['text_ids'][:, 1:],
             logits=g_outputs.logits,
@@ -155,43 +123,89 @@ class CtrlGenModel(nn.Module):
             sum_over_timesteps=False
         )
 
-        accu_d = tx.evals.accuracy(labels=f_labels,
-                                   preds=class_preds)
+        # Gumbel-softmax decoding, used in training
+        start_tokens = torch.ones_like(inputs['labels'].long()) * self.vocab.bos_token_id
+        end_token = self.vocab.eos_token_id
+
+        gumbel_helper = GumbelSoftmaxEmbeddingHelper(start_tokens=start_tokens,
+                                                     end_token=end_token,
+                                                     tau=gamma)
+
+        soft_outputs_, _, soft_length_, = self.decoder(
+            memory=enc_outputs,
+            memory_sequence_length=inputs['length'] - 1,
+            helper=gumbel_helper,
+            initial_state=self.connector(h_))
+
+        # Get inputs in correct format, [batch_size, channels, seq_length]
+        # soft_inputs =
+        soft_logits, soft_preds = self.classifier(
+            input=self.class_embedder(soft_ids=soft_outputs_.sample_id),
+            sequence_length=soft_length_)
+
+        sig_ce_logits_loss = nn.BCEWithLogitsLoss()
+
+        loss_g_class = sig_ce_logits_loss(soft_logits, (1 - f_labels))
+
+        # Greedy decoding, used in eval
+        outputs_, _, length_ = self.decoder(
+            memory=enc_outputs,
+            memory_sequence_length=inputs['length'] - 1,
+            decoding_strategy='infer_greedy', initial_state=self.connector(h_),
+            embedding=self.embedder, start_tokens=start_tokens, end_token=end_token)
+
+        # Accuracy on greedy-decoded samples, for training progress monitoring
+        # greedy_inputs = self.class_embedder(ids=outputs_.sample_id)
+        _, gdy_preds = self.classifier(
+            input=self.class_embedder(ids=outputs_.sample_id),
+            sequence_length=length_)
+
+        accu_g_gdy = tx.evals.accuracy(
+            labels=1 - f_labels, preds=gdy_preds)
 
         # Accuracy on soft samples, for training progress monitoring
         accu_g = tx.evals.accuracy(labels=1 - f_labels,
                                    preds=soft_preds)
         loss_g = loss_g_ae + lambda_g * loss_g_class
-        loss_d = loss_d_class
+        ret = {
+            "loss_g": loss_g,
+            "loss_g_ae": loss_g_ae,
+            "loss_g_class": loss_g_class,
+            "accu_g": accu_g,
+            "accu_g_gdy": accu_g_gdy,
+        }
+        if mode == 'eval':
+            ret.update({'outputs': outputs_})
+        return ret
 
-        if mode == "train":
+    def forward(self, inputs, gamma, lambda_g, mode, component):
+
+        f_labels = inputs['labels'].float()
+        if mode == 'train':
             if component == 'D':
-                return {
-                    "loss_d": loss_d,
-                    "accu_d": accu_d
-                }
-            else:
-                return {
-                    "loss_g": loss_g,
-                    "loss_g_ae": loss_g_ae,
-                    "loss_g_class": loss_g_class,
-                    "accu_g": accu_g,
-                    "accu_g_gdy": accu_g_gdy
-                }
+                ret_d = self.forward_D(inputs, f_labels, mode)
+                return ret_d
+
+            elif component == 'G':
+                ret_g = self.forward_G(inputs, f_labels, gamma, lambda_g, mode)
+                return ret_g
+
         else:
+            ret_d = self.forward_D(inputs, f_labels, mode)
+            ret_g = self.forward_G(inputs, f_labels, gamma, lambda_g, mode)
             rets = {
                 "batch_size": get_batch_size(inputs['text_ids']),
-                "loss_g": loss_g,
-                "loss_g_ae": loss_g_ae,
-                "loss_g_clas": loss_g_class,
-                "loss_d": loss_d_class,
-                "accu_d": accu_d,
-                "accu_g": accu_g,
-                "accu_g_gdy": accu_g_gdy
+                "loss_g": ret_g['loss_g'],
+                "loss_g_ae": ret_g['loss_g_ae'],
+                "loss_g_clas": ret_g['loss_g_class'],
+                "loss_d": ret_d['loss_d_class'],
+                "accu_d": ret_d['accu_d'],
+                "accu_g": ret_g['accu_g'],
+                "accu_g_gdy": ret_g['accu_g_gdy']
             }
             samples = {
                 "original": inputs['text_ids'][:, 1:],
-                "transferred": outputs_.sample_id
+                "transferred": rets['outputs'].sample_id
             }
             return rets, samples
 
