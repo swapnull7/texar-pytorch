@@ -31,11 +31,11 @@ class CtrlGenModel(nn.Module):
     """
     def __init__(self, vocab: tx.data.Vocab, hparams=None):
         super().__init__()
-
         self.vocab = vocab
+
         self._hparams = tx.HParams(hparams, None)
 
-        self.embedder = WordEmbedder(vocab_size=vocab.size,
+        self.embedder = WordEmbedder(vocab_size=self.vocab.size,
                                      hparams=self._hparams.embedder)
 
         self.encoder = UnidirectionalRNNEncoder(input_size=self.embedder.dim,
@@ -61,7 +61,7 @@ class CtrlGenModel(nn.Module):
                                            in_features=self._hparams.max_seq_length,
                                            hparams=self._hparams.classifier)
 
-        self.class_embedder = WordEmbedder(vocab_size=vocab.size,
+        self.class_embedder = WordEmbedder(vocab_size=self.vocab.size,
                                           hparams=self._hparams.embedder)
 
         # Creates optimizers
@@ -76,9 +76,10 @@ class CtrlGenModel(nn.Module):
 
         # Classification loss for the classifier
         # Get inputs in correct format, [batch_size, channels, seq_length]
+        class_inputs = self.class_embedder(ids=inputs['text_ids'][:, 1:])
         class_logits, class_preds = self.classifier(
-            input=self.class_embedder(ids=inputs['text_ids'][:, 1:]),
-            sequence_length=f_labels - 1)
+            input=class_inputs,
+            sequence_length=inputs['length'] - 1)
 
         sig_ce_logits_loss = nn.BCEWithLogitsLoss()
 
