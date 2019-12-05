@@ -214,6 +214,3 @@ class CtrlGenModel(nn.Module):
                 "transferred": ret_g['outputs'].sample_id
             }
             return rets, samples
-
-
-
