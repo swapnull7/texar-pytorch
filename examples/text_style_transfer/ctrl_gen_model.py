@@ -130,6 +130,7 @@ class CtrlGenModel(nn.Module):
             )
 
         else:
+            # for eval, there is no loss
             loss_g_ae = 0
 
         gumbel_helper = GumbelSoftmaxEmbeddingHelper(start_tokens=start_tokens,
