@@ -136,9 +136,9 @@ def _main():
             batch_size = vals.pop('batch_size')
 
             # Computes BLEU
-            hyps = tx.utils.map_ids_to_strs(samples['transferred'], vocab)
+            hyps = tx.data.Vocab.map_ids_to_strs(samples['transferred'], vocab)
 
-            refs = tx.utils.map_ids_to_strs(samples['original'], vocab)
+            refs = tx.data.Vocab.map_ids_to_strs(samples['original'], vocab)
             refs = np.expand_dims(refs, axis=1)
 
             bleu = tx.evals.corpus_bleu_moses(refs, hyps)
