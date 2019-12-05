@@ -39,7 +39,7 @@ class CtrlGenModel(nn.Module):
                                      hparams=self._hparams.embedder)
 
         self.encoder = UnidirectionalRNNEncoder(input_size=self.embedder.dim,
-                                                hparams=self._hparams.encoder)
+                                                hparams=self._hparams.encoder)  # type: UnidirectionalRNNEncoder
 
         # Encodes label
         self.label_connector = MLPTransformConnector(output_size=self._hparams.dim_c,
