@@ -203,7 +203,7 @@ class CtrlGenModel(nn.Module):
                 "batch_size": get_batch_size(inputs['text_ids']),
                 "loss_g": ret_g['loss_g'],
                 "loss_g_ae": ret_g['loss_g_ae'],
-                "loss_g_clas": ret_g['loss_g_class'],
+                "loss_g_class": ret_g['loss_g_class'],
                 "loss_d": ret_d['loss_d'],
                 "accu_d": ret_d['accu_d'],
                 "accu_g": ret_g['accu_g'],
