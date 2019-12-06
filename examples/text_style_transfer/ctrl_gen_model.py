@@ -133,6 +133,11 @@ class CtrlGenModel(nn.Module):
                 average_across_timesteps=True,
                 sum_over_timesteps=False
             )
+            if lambda_g == 0:
+                ret = {
+                    "loss_g_ae": loss_g_ae,
+                }
+                return ret
 
         else:
             # for eval, there is no loss
