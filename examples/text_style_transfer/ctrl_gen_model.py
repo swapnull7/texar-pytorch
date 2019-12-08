@@ -198,7 +198,6 @@ class CtrlGenModel(nn.Module):
 
     def forward(self, inputs, gamma, lambda_g, mode, component=None):
 
-        import pdb;pdb.set_trace()
         f_labels = inputs['labels'].float()
         if mode == 'train':
             if component == 'D':
