@@ -103,34 +103,33 @@ def _main():
             train_op_g.zero_grad()
             step += 1
 
-            # vals_d = model(batch, gamma_, lambda_g_, mode="train",
-            #                component="D")
-            # loss_d = vals_d['loss_d']
-            # loss_d.backward()
-            # train_op_d.step()
-            # recorder_d = {key: value.detach().cpu().data
-            #               for (key, value) in vals_d.items()}
-            # avg_meters_d.add(recorder_d)
+            vals_d = model(batch, gamma_, lambda_g_, mode="train",
+                           component="D")
+            loss_d = vals_d['loss_d']
+            loss_d.backward()
+            train_op_d.step()
+            recorder_d = {key: value.detach().cpu().data
+                          for (key, value) in vals_d.items()}
+            avg_meters_d.add(recorder_d)
 
             vals_g = model(batch, gamma_, lambda_g_, mode="train",
                            component="G")
 
-            loss_g_ae = vals_g['loss_g_ae']
-            loss_g_ae.backward()
-
-            if epoch > config.pretrain_nepochs:
+            if epoch <= config.pretrain_nepochs:
+                loss_g_ae = vals_g['loss_g_ae']
+                loss_g_ae.backward()
+                train_op_g_ae.step()
+            else:
                 loss_g = vals_g['loss_g']
                 loss_g.backward()
                 train_op_g.step()
-
-            train_op_g_ae.step()
 
             recorder_g = {key: value.detach().cpu().data
                           for (key, value) in vals_g.items()}
             avg_meters_g.add(recorder_g)
 
             if verbose and (step == 1 or step % config.display >= 0):
-                #print('step: {}, {}'.format(step, avg_meters_d.to_str(4)))
+                print('step: {}, {}'.format(step, avg_meters_d.to_str(4)))
                 print('step: {}, {}'.format(step, avg_meters_g.to_str(4)))
 
             if verbose and step % config.display_eval == 0:
