@@ -168,7 +168,8 @@ class CtrlGenModel(nn.Module):
             input=soft_inputs,
             sequence_length=soft_length_)
 
-        loss_g_class = F.binary_cross_entropy_with_logits(soft_logits, (1 - f_labels))
+        loss_g_class = F.binary_cross_entropy_with_logits(soft_logits,
+                                                          (1 - f_labels))
 
         # Accuracy on greedy-decoded samples, for training progress monitoring
         greedy_inputs = self.class_embedder(ids=outputs_.sample_id)
