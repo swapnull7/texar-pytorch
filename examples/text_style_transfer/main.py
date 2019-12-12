@@ -155,9 +155,12 @@ def main():
             refs = np.expand_dims(refs, axis=1)
 
             bleu = tx.evals.corpus_bleu_moses(refs, hyps)
-            vals['bleu'] = bleu
 
-            avg_meters.add(vals, weight=batch_size)
+            recorder = {key: value.detach().cpu().data
+                          for (key, value) in vals.items()}
+            recorder['bleu'] = bleu
+
+            avg_meters.add(recorder, weight=batch_size)
 
             # Writes samples
             tx.utils.write_paired_text(
